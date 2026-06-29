@@ -19,6 +19,7 @@ def make_completion(task: dict[str, Any], redis_key: str) -> dict[str, Any]:
     return {
         "task_id": task["task_id"],
         "agent_id": task["agent_id"],
+        "conversation_id": task["payload"]["conversation_id"],
         "status": "complete",
         "redis_key": redis_key,
         "completed_at": utc_now(),

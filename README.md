@@ -108,23 +108,39 @@ docker compose up -d
 When running successfully, the logs will show the workflow progressing through each stage:
 
 ```text
-[orchestrator] Sent task to agent-1
-[orchestrator] Sent task to agent-2
-[orchestrator] Sent task to agent-3
-[orchestrator] Sent task to agent-4
+agent-1-1  | [agent-1 listening on agent-1-tasks]
+agent-2-1  | [agent-2 listening on agent-2-tasks]
+agent-3-1  | [agent-3 listening on agent-3-tasks]
+agent-4-1  | [agent-4 listening on agent-4-tasks]
 
-[agent-1] Processing task...
-[agent-2] Processing task...
-[agent-3] Processing task...
-[agent-4] Processing task...
+orchestrator-1  | [orchestrator] sent be5b1841-345a-4f48-8b7a-9cfd8eba597b to agent-1-tasks
+orchestrator-1  | [orchestrator] sent da0dbe7c-cada-479b-abf1-74f98d345567 to agent-2-tasks
+orchestrator-1  | [orchestrator] sent 824a71a1-8cff-4278-8be9-665fde54a688 to agent-3-tasks
+orchestrator-1  | [orchestrator] sent 57e2b778-3826-4284-9cad-b431725f6627 to agent-4-tasks
+orchestrator-1  | [orchestrator] waiting for 4 completions on agent-completions
 
-[agent-1] Saved result to Redis
-[agent-1] Published completion
+agent-1-1       | [agent-1] received task be5b1841-345a-4f48-8b7a-9cfd8eba597b on conversation conversation-001
+agent-2-1       | [agent-2] received task da0dbe7c-cada-479b-abf1-74f98d345567 on conversation conversation-001
+agent-3-1       | [agent-3] received task 824a71a1-8cff-4278-8be9-665fde54a688 on conversation conversation-001
+agent-4-1       | [agent-4] received task 57e2b778-3826-4284-9cad-b431725f6627 on conversation conversation-001
 
 ...
 
-[orchestrator] Received completion from agent-4
-[orchestrator] Workflow complete
+agent-1-1       | [agent-1] saved output to Redis at agents:agent-1:tasks:be5b1841-345a-4f48-8b7a-9cfd8eba597b:output; completion sent
+agent-2-1       | [agent-2] saved output to Redis at agents:agent-2:tasks:da0dbe7c-cada-479b-abf1-74f98d345567:output; completion sent
+agent-3-1       | [agent-3] saved output to Redis at agents:agent-3:tasks:824a71a1-8cff-4278-8be9-665fde54a688:output; completion sent
+agent-4-1       | [agent-4] saved output to Redis at agents:agent-4:tasks:57e2b778-3826-4284-9cad-b431725f6627:output; completion sent
+
+...
+
+orchestrator-1  | [orchestrator] completion received
+orchestrator-1  |   conversation: conversation-001
+orchestrator-1  |   agent: agent-3
+orchestrator-1  |   task: 824a71a1-8cff-4278-8be9-665fde54a688
+orchestrator-1  |   redis_key: agents:agent-3:tasks:824a71a1-8cff-4278-8be9-665fde54a688:output
+orchestrator-1  |   output: agent-3 finished: score risk and priority | confidence=0.94
+orchestrator-1  | 
+orchestrator-1  | [orchestrator] all agents complete
 ```
 
 ## Redis

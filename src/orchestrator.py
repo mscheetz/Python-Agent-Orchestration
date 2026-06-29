@@ -5,7 +5,7 @@ from src.messages import make_task, decode, encode
 from src.redis import load_json
 from src.topics import agent_topic
 
-def dispatch_tasks(producer: Producer) -> dict[str, dict]:
+def dispatch_tasks(producer: Producer, conversation_id: str) -> dict[str, dict]:
     dispatched = {}
     goals = {
         "agent-1": "summarize the user request",
@@ -19,8 +19,8 @@ def dispatch_tasks(producer: Producer) -> dict[str, dict]:
             agent_id=agent_id,
             goal=goals[agent_id],
             payload={
-                "conversation_id": "demo-conversation-001",
-                "text": "Customer asks for a Kafka architecture simulating AI agents.",
+                "conversation_id": conversation_id,
+                "text": "Kafka architecture simulating AI agents.",
             },
         )
         topic = agent_topic(agent_id)
@@ -31,7 +31,7 @@ def dispatch_tasks(producer: Producer) -> dict[str, dict]:
     producer.flush()
     return dispatched
 
-def wait_for_completions(expected_task_ids: set[str]) -> None:
+def wait_for_completions(expected_task_ids: set[str], conversation_id: str) -> None:
     consumer = Consumer({
         "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
         "group.id": "orchestrator-completion-consumer",
@@ -53,6 +53,11 @@ def wait_for_completions(expected_task_ids: set[str]) -> None:
                 continue
 
             completion = decode(msg.value())
+            payload_conversation_id = completion.get("conversation_id")
+
+            if payload_conversation_id != conversation_id:
+                continue
+
             task_id = completion["task_id"]
             if task_id not in expected_task_ids or task_id in completed:
                 continue
@@ -60,6 +65,7 @@ def wait_for_completions(expected_task_ids: set[str]) -> None:
             completed.add(task_id)
             output = load_json(completion["redis_key"])
             print("\n[orchestrator] completion received")
+            print(f"  conversation: {payload_conversation_id}")
             print(f"  agent: {completion['agent_id']}")
             print(f"  task: {task_id}")
             print(f"  redis_key: {completion['redis_key']}")
@@ -75,9 +81,11 @@ def main() -> None:
 
     # Small delay so all agent consumers are subscribed
     time.sleep(5)
-    dispatched = dispatch_tasks(producer)
-    wait_for_completions(set(dispatched.keys()))
 
+    conversation_id = "conversation-001"
+
+    dispatched = dispatch_tasks(producer, conversation_id)
+    wait_for_completions(set(dispatched.keys()), conversation_id)
 
 if __name__ == "__main__":
     main()

@@ -43,10 +43,16 @@ def main(agent_id: str) -> None:
                 continue
             if msg.error():
                 print(f"[{agent_id}] Kafka error: {msg.error()}")
+                continue
 
-            task = decode(msg.value())
-
-            print(f"[{agent_id}] received task {task['task_id']}")
+            try:
+                task = decode(msg.value())
+            except json.JSONDecodeError:
+                print(f"[{agent_id}] skipping non-JSON message: {msg.value()!r}")
+                consumer.commit(msg)
+                continue
+            
+            print(f"[{agent_id}] received task {task['task_id']} on conversation {task['payload']['conversation_id']}")
 
             output = simulate_ai_agent(task)
             redis_key = save_agent_output(agent_id, task["task_id"], output)
@@ -59,6 +65,7 @@ def main(agent_id: str) -> None:
             print(f"[{agent_id}] saved output to Redis at {redis_key}; completion sent")
 
     finally:
+        producer.flush()
         consumer.close()
 
 if __name__ == "__main__":
