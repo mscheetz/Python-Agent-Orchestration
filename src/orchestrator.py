@@ -1,11 +1,22 @@
+import asyncio
+import json
 import time
+from uuid import uuid4
 from confluent_kafka import Consumer, Producer
 from src.config import AGENTS, COMPLETION_TOPIC, KAFKA_BOOTSTRAP_SERVERS
+from src.llm import choose_agents, synthesize_final_answer
 from src.messages import make_task, decode, encode
 from src.redis import load_json
 from src.topics import agent_topic
 
-def dispatch_tasks(producer: Producer, conversation_id: str) -> dict[str, dict]:
+USER_TEXT = "Kafka architecture simulating AI agents."
+
+def dispatch_tasks(
+    producer: Producer, 
+    conversation_id: str, 
+    user_text: str,
+    selected_agents: list[str],
+) -> dict[str, dict]:
     dispatched = {}
     goals = {
         "agent-1": "summarize the user request",
@@ -14,45 +25,55 @@ def dispatch_tasks(producer: Producer, conversation_id: str) -> dict[str, dict]:
         "agent-4": "prepare final recommendation",
     }
 
-    for agent_id in AGENTS:
+    for agent_id in selected_agents:
         task = make_task(
             agent_id=agent_id,
             goal=goals[agent_id],
             payload={
                 "conversation_id": conversation_id,
-                "text": "Kafka architecture simulating AI agents.",
+                "text": user_text,
             },
         )
         topic = agent_topic(agent_id)
-        producer.produce(topic, key=task["task_id"], value=encode(task))
+        producer.produce(topic, key=conversation_id, value=encode(task))
         dispatched[task["task_id"]] = task
         print(f"[orchestrator] sent {task['task_id']} to {topic}")
 
     producer.flush()
     return dispatched
 
-def wait_for_completions(expected_task_ids: set[str], conversation_id: str) -> None:
+async def wait_for_completions(expected_task_ids: set[str], conversation_id: str) -> list[dict]:
     consumer = Consumer({
         "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
-        "group.id": "orchestrator-completion-consumer",
+        "group.id": f"orchestrator-completion-consumer-{conversation_id}",
         "auto.offset.reset": "earliest",
         "enable.auto.commit": True,
     })
     consumer.subscribe([COMPLETION_TOPIC])
 
     completed = set()
+    agent_outputs = []
+
     print(f"[orchestrator] waiting for {len(expected_task_ids)} completions on {COMPLETION_TOPIC}")
 
     try:
         while completed != expected_task_ids:
             msg = consumer.poll(1.0)
             if msg is None:
+                await asyncio.sleep(0)
                 continue
+
             if msg.error():
                 print(f"[orchestrator] Kafka error: {msg.error()}")
                 continue
 
-            completion = decode(msg.value())
+            try:
+                completion = decode(msg.value())
+            except json.JSONDecodeError:
+                print(f"[orchestrator] skipping non-JSON message: {msg.value()!r}")
+                consumer.commit(msg)
+                continue
+
             payload_conversation_id = completion.get("conversation_id")
 
             if payload_conversation_id != conversation_id:
@@ -62,30 +83,104 @@ def wait_for_completions(expected_task_ids: set[str], conversation_id: str) -> N
             if task_id not in expected_task_ids or task_id in completed:
                 continue
 
-            completed.add(task_id)
             output = load_json(completion["redis_key"])
+            agent_outputs.append(output)
+            completed.add(task_id)
+            
+            consumer.commit(msg)
+
             print("\n[orchestrator] completion received")
             print(f"  conversation: {payload_conversation_id}")
             print(f"  agent: {completion['agent_id']}")
             print(f"  task: {task_id}")
             print(f"  redis_key: {completion['redis_key']}")
-            print(f"  output: {output['result']} | confidence={output['confidence']}")
+            print(f"  output: {output['result']}")
 
         print("\n[orchestrator] all agents complete")
+        return agent_outputs
+
     finally:
         consumer.close()
 
+async def run_conversation(user_text: str) -> str:
+    producer = Producer({
+        "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS
+    })
 
-def main() -> None:
-    producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS})
+    conversation_id = f"conversation-{uuid4()}"
 
+    routing = await choose_agents(user_text)
+
+    selected_agents = routing.get("agents", {})
+
+    if not selected_agents:
+        selected_agents = ["agent-1", "agent-4"]
+
+    valid_agents = set(AGENTS)
+
+    selected_agents = [
+        agent for agent in selected_agents
+        if agent in valid_agents
+    ]
+
+    print(f"[orchestrator] selected agents: {selected_agents}")
+    print(f"[orchestrator] routing reason: {routing.get('reasoning')}")
+
+    dispatched = dispatch_tasks(
+        producer=producer,
+        conversation_id=conversation_id,
+        user_text=user_text,
+        selected_agents=selected_agents,
+    )
+
+    agent_outputs = await wait_for_completions(
+        expected_task_ids=set(dispatched.keys()),
+        conversation_id=conversation_id,
+    )
+
+    print(f"[orchestrator] getting final answer based on {len(agent_outputs)} agent outputs")
+
+    final_answer = await synthesize_final_answer(
+        conversation_id=conversation_id,
+        user_text=user_text,
+        agent_outputs=agent_outputs,
+    )
+
+    return final_answer
+
+async def main() -> None:
     # Small delay so all agent consumers are subscribed
     time.sleep(5)
 
-    conversation_id = "conversation-001"
+    await run_conversation(USER_TEXT);
 
-    dispatched = dispatch_tasks(producer, conversation_id)
-    wait_for_completions(set(dispatched.keys()), conversation_id)
+    # producer = Producer({
+    #     "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS
+    # })
+
+    # conversation_id = f"conversation-{uuid4()}"
+
+    # dispatched = dispatch_tasks(
+    #     producer=producer, 
+    #     conversation_id=conversation_id,
+    #     user_text=USER_TEXT
+    # )
+
+    # agent_outputs = await wait_for_completions(
+    #     expected_task_ids=set(dispatched.keys()),
+    #     conversation_id=conversation_id
+    # )
+
+    # print(f"[orchestrator] getting final answer based on {len(agent_outputs)} agent outputs")
+
+    # final_answer = await synthesize_final_answer(
+    #     conversation_id=conversation_id,
+    #     user_text=USER_TEXT,
+    #     agent_outputs=agent_outputs
+    # )
+
+    # print("\n[orchestrator] final synthesized answer")
+    # print(final_answer)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

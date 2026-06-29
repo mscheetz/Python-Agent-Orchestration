@@ -1,64 +1,106 @@
 # Orchestration
 
-A sample event-driven orchestration framework demonstrating how an orchestrator coordinates multiple AI agents using **Apache Kafka** for messaging and **Redis** for shared state.
+A sample event-driven orchestration framework demonstrating how a controller coordinates multiple AI agents using **Apache Kafka** for messaging, **Redis** for shared state, and **FastAPI** as the public API.
 
 ## Architecture
 
 The application consists of:
+
+* **Controller (FastAPI)**
+
+  * Exposes a REST API
+  * Accepts user requests
+  * Invokes the orchestration workflow
+  * Returns the synthesized response
 
 * **Orchestrator**
 
   * Creates work items
   * Publishes tasks to Kafka (one topic per agent)
   * Waits for agent completion events
-  * Tracks overall workflow completion
+  * Retrieves agent outputs from Redis
+  * Synthesizes a final response using the LLM
 
 * **4 Agents**
 
   * Consume tasks from their dedicated Kafka topic
-  * Simulate AI processing
+  * Execute a specialized AI role
   * Store results in Redis
-  * Publish a completion event back to the orchestrator
+  * Publish completion events
 
 * **Kafka**
 
-  * Message broker for asynchronous communication
+  * Event bus for asynchronous communication
   * One task topic per agent
-  * Shared completion topic for agent status
+  * Shared completion topic
 
 * **Redis**
 
-  * Stores each agent's output
-  * Serves as a simple shared data store
+  * Shared state store
+  * Persists agent outputs
 
-## Message Flow
+---
+
+# Architecture
 
 ```text
-                 +----------------+
-                 |  Orchestrator  |
-                 +----------------+
-                    |    |    |    |
-                    |    |    |    |
-        ------------     |     -------------------------
-       |                 |                 |           | 
-agent-1-tasks   agent-2-tasks   agent-3-tasks   agent-4-tasks
-       |                 |                 |           | 
-   +--------+       +--------+       +--------+       +--------+
-   |Agent 1 |       |Agent 2 |       |Agent 3 |       |Agent 4 |
-   +--------+       +--------+       +--------+       +--------+
-       |                 |                 |               |
-       +------- Save Results to Redis -----+---------------+
-       |                 |                 |               |
-       +-----------------------------------------------+
-                       agent-completions
-                              |
-                              v
-                      +----------------+
-                      |  Orchestrator  |
-                      +----------------+
+                HTTP POST
+                    |
+                    v
+             +----------------+
+             |   Controller   |
+             |    FastAPI     |
+             +----------------+
+                    |
+                    v
+             +----------------+
+             |  Orchestrator  |
+             +----------------+
+                    |
+      +-------------+-------------+-------------+
+      |             |             |             |
+      v             v             v             v 
+agent-1       agent-2       agent-3       agent-4
+  topic          topic          topic         topic
+      |             |             |             |
+      v             v             v             v
+ +---------+   +---------+   +---------+   +---------+
+ | Agent 1 |   | Agent 2 |   | Agent 3 |   | Agent 4 |
+ +---------+   +---------+   +---------+   +---------+
+      |             |             |             |
+      +-------------+-------------+-------------+
+                    |
+               Store Results
+                  in Redis
+                    |
+                    v
+          agent-completions topic
+                    |
+                    v
+             +----------------+
+             |  Orchestrator  |
+             +----------------+
+                    |
+             Final LLM Synthesis
+                    |
+                    v
+             HTTP Response
 ```
 
-## Topics
+---
+
+# Agent Responsibilities
+
+| Agent   | Responsibility               |
+| ------- | ---------------------------- |
+| Agent 1 | Summarize the user request   |
+| Agent 2 | Extract action items         |
+| Agent 3 | Analyze risks and priorities |
+| Agent 4 | Produce recommendations      |
+
+---
+
+# Kafka Topics
 
 | Topic               | Producer     | Consumer     |
 | ------------------- | ------------ | ------------ |
@@ -66,126 +108,222 @@ agent-1-tasks   agent-2-tasks   agent-3-tasks   agent-4-tasks
 | `agent-2-tasks`     | Orchestrator | Agent 2      |
 | `agent-3-tasks`     | Orchestrator | Agent 3      |
 | `agent-4-tasks`     | Orchestrator | Agent 4      |
-| `agent-completions` | All Agents   | Orchestrator |
+| `agent-completions` | Agents       | Orchestrator |
 
-## Setup
+---
 
-Create and activate a virtual environment:
+# API
+
+## Health
+
+```http
+GET /health
+```
+
+Response
+
+```json
+{
+  "status": "ok"
+}
+```
+
+---
+
+## Conversation
+
+```http
+POST /conversation
+Content-Type: application/json
+```
+
+Body
+
+```json
+{
+  "text": "Kafka architecture simulating AI agents."
+}
+```
+
+Example using curl
+
+```bash
+curl -X POST http://localhost:8000/conversation \
+  -H "Content-Type: application/json" \
+  -d '{
+        "text":"Kafka architecture simulating AI agents."
+      }'
+```
+
+Example response
+
+```json
+{
+  "answer": "..."
+}
+```
+
+---
+
+# Setup
+
+Create a virtual environment
 
 ```bash
 python3 -m venv env
 source env/bin/activate
 ```
 
-## Start the Environment
+Install dependencies
 
-Build the Docker images:
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+# OpenRouter
+
+Create `.env` from `.env.sample`.
+
+Create an API key on OpenRouter.
+
+Populate:
+
+```text
+OPENROUTER_API_KEY=...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
+```
+
+---
+
+# Running
+
+Build
 
 ```bash
 docker compose build
 ```
 
-Start Kafka, Redis, the orchestrator, and all agents:
+Start
 
 ```bash
 docker compose up
 ```
 
-Or rebuild and start everything:
+Rebuild
 
 ```bash
 docker compose up --build
 ```
 
-Run in detached mode:
+Detached
 
 ```bash
 docker compose up -d
 ```
 
-## Expected Output
+---
 
-When running successfully, the logs will show the workflow progressing through each stage:
+# Example Workflow
 
 ```text
-agent-1-1  | [agent-1 listening on agent-1-tasks]
-agent-2-1  | [agent-2 listening on agent-2-tasks]
-agent-3-1  | [agent-3 listening on agent-3-tasks]
-agent-4-1  | [agent-4 listening on agent-4-tasks]
-
-orchestrator-1  | [orchestrator] sent be5b1841-345a-4f48-8b7a-9cfd8eba597b to agent-1-tasks
-orchestrator-1  | [orchestrator] sent da0dbe7c-cada-479b-abf1-74f98d345567 to agent-2-tasks
-orchestrator-1  | [orchestrator] sent 824a71a1-8cff-4278-8be9-665fde54a688 to agent-3-tasks
-orchestrator-1  | [orchestrator] sent 57e2b778-3826-4284-9cad-b431725f6627 to agent-4-tasks
-orchestrator-1  | [orchestrator] waiting for 4 completions on agent-completions
-
-agent-1-1       | [agent-1] received task be5b1841-345a-4f48-8b7a-9cfd8eba597b on conversation conversation-001
-agent-2-1       | [agent-2] received task da0dbe7c-cada-479b-abf1-74f98d345567 on conversation conversation-001
-agent-3-1       | [agent-3] received task 824a71a1-8cff-4278-8be9-665fde54a688 on conversation conversation-001
-agent-4-1       | [agent-4] received task 57e2b778-3826-4284-9cad-b431725f6627 on conversation conversation-001
-
-...
-
-agent-1-1       | [agent-1] saved output to Redis at agents:agent-1:tasks:be5b1841-345a-4f48-8b7a-9cfd8eba597b:output; completion sent
-agent-2-1       | [agent-2] saved output to Redis at agents:agent-2:tasks:da0dbe7c-cada-479b-abf1-74f98d345567:output; completion sent
-agent-3-1       | [agent-3] saved output to Redis at agents:agent-3:tasks:824a71a1-8cff-4278-8be9-665fde54a688:output; completion sent
-agent-4-1       | [agent-4] saved output to Redis at agents:agent-4:tasks:57e2b778-3826-4284-9cad-b431725f6627:output; completion sent
-
-...
-
-orchestrator-1  | [orchestrator] completion received
-orchestrator-1  |   conversation: conversation-001
-orchestrator-1  |   agent: agent-3
-orchestrator-1  |   task: 824a71a1-8cff-4278-8be9-665fde54a688
-orchestrator-1  |   redis_key: agents:agent-3:tasks:824a71a1-8cff-4278-8be9-665fde54a688:output
-orchestrator-1  |   output: agent-3 finished: score risk and priority | confidence=0.94
-orchestrator-1  | 
-orchestrator-1  | [orchestrator] all agents complete
+Client
+  |
+POST /conversation
+  |
+Controller
+  |
+Orchestrator
+  |
+Dispatch 4 Kafka Tasks
+  |
++----------+----------+----------+----------+
+|          |          |          |
+Agent 1    Agent 2    Agent 3    Agent 4
+|          |          |          |
+Redis      Redis      Redis      Redis
+ \          |          |         /
+  \         |          |        /
+   +--------+----------+-------+
+            |
+agent-completions
+            |
+Orchestrator
+            |
+LLM synthesis
+            |
+HTTP response
 ```
 
-## Redis
+---
 
-Each agent stores its processed output in Redis using the task ID as the key.
+# Redis
+
+Each agent stores its output under a Redis key.
 
 Example:
 
 ```text
-task:12345 -> {
-    "agent": "agent-1",
-    "result": "Processed output"
+agents:agent-1:tasks:<task-id>:output
+```
+
+Value
+
+```json
+{
+  "task_id": "...",
+  "agent_id": "agent-1",
+  "goal": "summarize the user request",
+  "result": "...",
+  "generated_at": "..."
 }
 ```
 
-### Querying Redis:  
+Inspect Redis
 
-From another terminal while app is up
-```
+```bash
 docker exec -it redis-box redis-cli
 ```
 
-View keys:
-```
+List keys
+
+```redis
 KEYS *
 ```
-Should return similar to:
-```
-1) "agents:agent-4:tasks:92f542f8-65ef-43b2-a4b5-d0e525888a17:output"
-2) "agents:agent-3:tasks:f1026475-9a40-4c45-b293-e47df9a9d679:output"
-3) "agents:agent-2:tasks:0a2d2ed0-e429-4d9e-b478-bf363857154b:output"
-4) "agents:agent-1:tasks:32c88bb3-7060-4da6-9690-e01b060c7472:output"
-```
-View a value:
-```
-GET agents:agent-4:tasks:92f542f8-65ef-43b2-a4b5-d0e525888a17:output
-```
-Should return similar to:
-```
-"{\"task_id\": \"92f542f8-65ef-43b2-a4b5-d0e525888a17\", \"agent_id\": \"agent-4\", \"goal\": \"prepare final recommendation\", \"input_payload\": {\"conversation_id\": \"conversation-001\", \"text\": \"Kafka architecture simulating AI agents.\"}, \"result\": \"agent-4 finished: prepare final recommendation\", \"confidence\": 0.76, \"generated_at\": \"2026-06-29T12:43:50.593448+00:00\"}"
+
+Retrieve a value
+
+```redis
+GET agents:agent-1:tasks:<task-id>:output
 ```
 
-## Stopping
+---
 
-Stop all services and remove containers, networks, and volumes:
+# Development Notes
+
+The project uses:
+
+* Apache Kafka for asynchronous agent communication
+* Redis for shared state
+* FastAPI for the REST interface
+* OpenRouter as the LLM provider
+* Docker Compose for local development
+
+For this project, all services currently run using Docker host networking because the development machine exhibited Docker bridge networking issues affecting TLS traffic to OpenRouter. Using host networking provides reliable communication between Kafka, Redis, the controller, and the agents during local development.
+
+---
+
+# Stopping
+
+Stop all services
+
+```bash
+docker compose down
+```
+
+Remove containers, networks, and volumes
 
 ```bash
 docker compose down -v

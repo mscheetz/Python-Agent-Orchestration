@@ -1,0 +1,24 @@
+
+# Uses RestClient VS Code Extension
+
+GET http://localhost:8000/health HTTP/1.1
+
+###
+
+# 1 AGENT ONLY: agent-2
+POST http://localhost:8000/conversation 
+Content-Type: application/json
+
+{
+    "text":"What are the steps for creating a peanut butter and jelly sandwich"
+} 
+
+###
+# ALL AGENTS: agent-1, agent-2, agent-3, agent-4
+POST http://localhost:8000/conversation 
+Content-Type: application/json
+
+{
+    "text":"I’m planning to launch a small SaaS product in 8 weeks that helps local gyms manage class bookings. Summarize the idea, identify the concrete next steps, analyze the biggest risks and priorities, and recommend the best execution plan."
+} 
+
