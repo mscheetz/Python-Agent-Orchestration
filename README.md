@@ -77,6 +77,13 @@ python3 -m venv env
 source env/bin/activate
 ```
 
+### Open Router
+Create `.env` from `.env.sample`  
+
+Create an API Key on [OpenRouter](https://openrouter.ai)
+
+Set `OPENROUTER_API_KEY`
+
 ## Start the Environment
 
 Build the Docker images:
