@@ -116,41 +116,6 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9092
       - REDIS_URL=redis://127.0.0.1:6379/0
 
-  ## ONLY HEALTH WORKS
-  # controller:
-  #   build: .
-  #   command: uvicorn src.controller:app --host 0.0.0.0 --port 8000
-  #   network_mode: host
-  #   depends_on:
-  #     kafka:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_started
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:29092
-  #     - REDIS_URL=redis://127.0.0.1:6379/0
-
-  # THIS WORKS ONLY FROM IN THE DOCKER CONTAINER
-  # controller:
-  #   build: .
-  #   command: uvicorn src.controller:app --host 0.0.0.0 --port 8000
-  #   depends_on:
-  #     kafka:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_started
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - KAFKA_BOOTSTRAP_SERVERS=kafka-box:9092
-  #     - REDIS_URL=redis://redis-box:6379/0
-  #   ports:
-  #     - "8000:8000"
-  #   networks:
-  #     - kafka-net
-
 networks:
   kafka-net:
     driver: bridge

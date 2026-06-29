@@ -133,7 +133,7 @@ Response
 ## Conversation
 
 ```http
-POST /conversation
+POST /api/orchestrator
 Content-Type: application/json
 ```
 
@@ -148,7 +148,7 @@ Body
 Example using curl
 
 ```bash
-curl -X POST http://localhost:8000/conversation \
+curl -X POST http://localhost:8000/api/orchestrator \
   -H "Content-Type: application/json" \
   -d '{
         "text":"Kafka architecture simulating AI agents."

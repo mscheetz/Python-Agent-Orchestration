@@ -5,22 +5,20 @@ from src.orchestrator import run_conversation
 app = FastAPI()
 
 
-class ConversationRequest(BaseModel):
+class OrchestrationRequest(BaseModel):
     text: str
 
 
-class ConversationResponse(BaseModel):
+class OrchestrationResponse(BaseModel):
     answer: str
 
-
-@app.post("/conversation", response_model=ConversationResponse)
-async def conversation(req: ConversationRequest):
-    print(f"New request from controller")
-    
-    answer = await run_conversation(req.text)
-    return ConversationResponse(answer=answer)
-
-
-@app.get("/health")
+@app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+@app.post("/api/orchestrator", response_model=OrchestrationResponse)
+async def conversation(req: OrchestrationRequest):
+    print(f"New request from controller")
+
+    answer = await run_conversation(req.text)
+    return OrchestrationResponse(answer=answer)

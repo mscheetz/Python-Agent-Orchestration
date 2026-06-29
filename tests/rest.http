@@ -1,12 +1,12 @@
 
 # Uses RestClient VS Code Extension
 
-GET http://localhost:8000/health HTTP/1.1
+GET http://localhost:8000/api/health HTTP/1.1
 
 ###
 
 # 1 AGENT ONLY: agent-2
-POST http://localhost:8000/conversation 
+POST http://localhost:8000/api/orchestrator 
 Content-Type: application/json
 
 {
@@ -15,7 +15,7 @@ Content-Type: application/json
 
 ###
 # ALL AGENTS: agent-1, agent-2, agent-3, agent-4
-POST http://localhost:8000/conversation 
+POST http://localhost:8000/api/orchestrator 
 Content-Type: application/json
 
 {
