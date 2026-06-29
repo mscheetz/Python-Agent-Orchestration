@@ -4,14 +4,19 @@ import time
 from uuid import uuid4
 from confluent_kafka import Consumer, Producer
 from src.config import AGENTS, COMPLETION_TOPIC, KAFKA_BOOTSTRAP_SERVERS
-from src.llm import synthesize_final_answer
+from src.llm import choose_agents, synthesize_final_answer
 from src.messages import make_task, decode, encode
 from src.redis import load_json
 from src.topics import agent_topic
 
 USER_TEXT = "Kafka architecture simulating AI agents."
 
-def dispatch_tasks(producer: Producer, conversation_id: str, user_text: str) -> dict[str, dict]:
+def dispatch_tasks(
+    producer: Producer, 
+    conversation_id: str, 
+    user_text: str,
+    selected_agents: list[str],
+) -> dict[str, dict]:
     dispatched = {}
     goals = {
         "agent-1": "summarize the user request",
@@ -20,7 +25,7 @@ def dispatch_tasks(producer: Producer, conversation_id: str, user_text: str) -> 
         "agent-4": "prepare final recommendation",
     }
 
-    for agent_id in AGENTS:
+    for agent_id in selected_agents:
         task = make_task(
             agent_id=agent_id,
             goal=goals[agent_id],
@@ -104,10 +109,28 @@ async def run_conversation(user_text: str) -> str:
 
     conversation_id = f"conversation-{uuid4()}"
 
+    routing = await choose_agents(user_text)
+
+    selected_agents = routing.get("agents", {})
+
+    if not selected_agents:
+        selected_agents = ["agent-1", "agent-4"]
+
+    valid_agents = set(AGENTS)
+
+    selected_agents = [
+        agent for agent in selected_agents
+        if agent in valid_agents
+    ]
+
+    print(f"[orchestrator] selected agents: {selected_agents}")
+    print(f"[orchestrator] routing reason: {routing.get('reasoning')}")
+
     dispatched = dispatch_tasks(
         producer=producer,
         conversation_id=conversation_id,
         user_text=user_text,
+        selected_agents=selected_agents,
     )
 
     agent_outputs = await wait_for_completions(

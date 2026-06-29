@@ -29,6 +29,44 @@ AGENT_SYSTEM_PROMPTS = {
     "agent-4": "You are a recommendation agent. Produce a practical final recommendation.",
 }
 
+async def choose_agents(user_text: str) -> dict:
+    print("Determining agents to use")
+    try:        
+        response = await client.chat.completions.create(
+            model=OPENROUTER_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an agent router. Decide which agents are needed. "
+                        "Return only valid JSON with keys: agents, reasoning. "
+                        "Available agents: "
+                        "agent-1=summarization, "
+                        "agent-2=action items, "
+                        "agent-3=risk and priority analysis, "
+                        "agent-4=recommendation."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": user_text,
+                },
+            ],
+        )
+
+        return json.loads(response.choices[0].message.content)
+    except APIConnectionError as e:
+        print("Connection error:", repr(e))
+        traceback.print_exc()
+        raise
+    except APIStatusError as e:
+        print("Status:", e.status_code)
+        print(e.response.text)
+        raise
+    except Exception:
+        traceback.print_exc()
+        raise
+
 async def run_agent_llm(agent_id: str, task: dict) -> dict:
     print(f"[{agent_id}] sending prompt to llm")
 
@@ -69,6 +107,7 @@ async def run_agent_llm(agent_id: str, task: dict) -> dict:
 
 
 async def synthesize_final_answer(conversation_id: str, user_text: str, agent_outputs: list[dict]) -> str:
+    print("Generating final answer")
     
     try:
         response = await client.chat.completions.create(
