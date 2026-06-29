@@ -4,6 +4,7 @@ services:
     container_name: kafka-box
     ports:
       - "9092:9092"
+      - "29092:29092"
     networks:
       - kafka-net
     environment:
@@ -38,21 +39,21 @@ services:
     networks:
       - kafka-net
 
-  orchestrator:
-    build: .
-    command: python -m src.orchestrator
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    env_file:
-      - .env
-    environment:
-      - KAFKA_BOOTSTRAP_SERVERS=kafka-box:9092
-      - REDIS_URL=redis://redis-box:6379/0
-    networks:
-      - kafka-net
+  # orchestrator:
+  #   build: .
+  #   #command: python -m src.orchestrator
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_started
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - KAFKA_BOOTSTRAP_SERVERS=kafka-box:9092
+  #     - REDIS_URL=redis://redis-box:6379/0
+  #   networks:
+  #     - kafka-net
 
   agent-1:
     build: .
@@ -117,6 +118,40 @@ services:
       - REDIS_URL=redis://redis-box:6379/0
     networks:
       - kafka-net
+
+  controller:
+    build: .
+    command: uvicorn src.controller:app --host 0.0.0.0 --port 8000
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-box:9092
+      - REDIS_URL=redis://redis-box:6379/0
+    ports:
+      - "8000:8000"
+    networks:
+      - kafka-net
+
+  # this worked / partially
+  # controller:
+  #   build: .
+  #   command: uvicorn src.controller:app --host 0.0.0.0 --port 8000
+  #   network_mode: host
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_started
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - KAFKA_BOOTSTRAP_SERVERS=localhost:29092
+  #     - REDIS_URL=redis://localhost:6379/0
 
 networks:
   kafka-net:

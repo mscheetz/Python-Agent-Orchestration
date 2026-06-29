@@ -1,0 +1,12 @@
+
+
+POST http://localhost:8000/conversation 
+Content-Type: application/json
+
+{
+    "text":"Kafka architecture simulating AI agents."
+} 
+
+###
+
+GET http://localhost:8000/health HTTP/1.1

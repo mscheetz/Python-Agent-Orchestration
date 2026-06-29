@@ -97,37 +97,67 @@ async def wait_for_completions(expected_task_ids: set[str], conversation_id: str
     finally:
         consumer.close()
 
-async def main() -> None:
+async def run_conversation(user_text: str) -> str:
     producer = Producer({
         "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS
     })
 
-    # Small delay so all agent consumers are subscribed
-    time.sleep(5)
-
     conversation_id = f"conversation-{uuid4()}"
 
     dispatched = dispatch_tasks(
-        producer=producer, 
+        producer=producer,
         conversation_id=conversation_id,
-        user_text=USER_TEXT
+        user_text=user_text,
     )
 
     agent_outputs = await wait_for_completions(
         expected_task_ids=set(dispatched.keys()),
-        conversation_id=conversation_id
+        conversation_id=conversation_id,
     )
 
     print(f"[orchestrator] getting final answer based on {len(agent_outputs)} agent outputs")
 
     final_answer = await synthesize_final_answer(
         conversation_id=conversation_id,
-        user_text=USER_TEXT,
-        agent_outputs=agent_outputs
+        user_text=user_text,
+        agent_outputs=agent_outputs,
     )
 
-    print("\n[orchestrator] final synthesized answer")
-    print(final_answer)
+    return final_answer
+
+async def main() -> None:
+    # Small delay so all agent consumers are subscribed
+    time.sleep(5)
+
+    await run_conversation(USER_TEXT);
+
+    # producer = Producer({
+    #     "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS
+    # })
+
+    # conversation_id = f"conversation-{uuid4()}"
+
+    # dispatched = dispatch_tasks(
+    #     producer=producer, 
+    #     conversation_id=conversation_id,
+    #     user_text=USER_TEXT
+    # )
+
+    # agent_outputs = await wait_for_completions(
+    #     expected_task_ids=set(dispatched.keys()),
+    #     conversation_id=conversation_id
+    # )
+
+    # print(f"[orchestrator] getting final answer based on {len(agent_outputs)} agent outputs")
+
+    # final_answer = await synthesize_final_answer(
+    #     conversation_id=conversation_id,
+    #     user_text=USER_TEXT,
+    #     agent_outputs=agent_outputs
+    # )
+
+    # print("\n[orchestrator] final synthesized answer")
+    # print(final_answer)
 
 if __name__ == "__main__":
     asyncio.run(main())
