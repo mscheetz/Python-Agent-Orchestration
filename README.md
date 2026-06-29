@@ -156,6 +156,33 @@ task:12345 -> {
 }
 ```
 
+### Querying Redis:  
+
+From another terminal while app is up
+```
+docker exec -it redis-box redis-cli
+```
+
+View keys:
+```
+KEYS *
+```
+Should return similar to:
+```
+1) "agents:agent-4:tasks:92f542f8-65ef-43b2-a4b5-d0e525888a17:output"
+2) "agents:agent-3:tasks:f1026475-9a40-4c45-b293-e47df9a9d679:output"
+3) "agents:agent-2:tasks:0a2d2ed0-e429-4d9e-b478-bf363857154b:output"
+4) "agents:agent-1:tasks:32c88bb3-7060-4da6-9690-e01b060c7472:output"
+```
+View a value:
+```
+GET agents:agent-4:tasks:92f542f8-65ef-43b2-a4b5-d0e525888a17:output
+```
+Should return similar to:
+```
+"{\"task_id\": \"92f542f8-65ef-43b2-a4b5-d0e525888a17\", \"agent_id\": \"agent-4\", \"goal\": \"prepare final recommendation\", \"input_payload\": {\"conversation_id\": \"conversation-001\", \"text\": \"Kafka architecture simulating AI agents.\"}, \"result\": \"agent-4 finished: prepare final recommendation\", \"confidence\": 0.76, \"generated_at\": \"2026-06-29T12:43:50.593448+00:00\"}"
+```
+
 ## Stopping
 
 Stop all services and remove containers, networks, and volumes:
